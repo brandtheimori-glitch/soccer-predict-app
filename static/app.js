@@ -23,3 +23,30 @@ if (valueBetToggle) {
     valueBetToggle.textContent = table.classList.contains("hidden") ? "show bets" : "hide bets";
   });
 }
+
+// --- Install as an app -----------------------------------------------------
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+
+let deferredInstall = null;
+const installBtn = document.getElementById("install-app");
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  if (installBtn) installBtn.hidden = false;
+});
+if (installBtn) {
+  installBtn.addEventListener("click", async () => {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null;
+    installBtn.hidden = true;
+  });
+}
+window.addEventListener("appinstalled", () => {
+  if (installBtn) installBtn.hidden = true;
+});

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#16a34a"/>
+  <circle cx="256" cy="238" r="150" fill="#ffffff"/>
+  <polygon points="256,168 322,216 297,294 215,294 190,216" fill="#1a1d23"/>
+  <g stroke="#1a1d23" stroke-width="14" stroke-linecap="round">
+    <line x1="256" y1="168" x2="256" y2="92"/>
+    <line x1="322" y1="216" x2="394" y2="192"/>
+    <line x1="297" y1="294" x2="342" y2="356"/>
+    <line x1="215" y1="294" x2="170" y2="356"/>
+    <line x1="190" y1="216" x2="118" y2="192"/>
+  </g>
+  <text x="256" y="452" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="68" fill="#ffffff">PICKS</text>
+</svg>
