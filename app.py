@@ -28,6 +28,16 @@ from fit_parameters import fit_league_parameters
 from model import predict_match
 
 app = Flask(__name__)
+
+
+@app.template_filter("nice_date")
+def nice_date(iso: str) -> str:
+    """'2026-11-21' -> 'Sat 21 Nov' (falls back to the raw text)."""
+    from datetime import datetime
+    try:
+        return datetime.strptime(iso, "%Y-%m-%d").strftime("%a %d %b").replace(" 0", " ")
+    except (TypeError, ValueError):
+        return iso or ""
 MAX_FIXTURES_PER_LEAGUE = 40  # two weeks of a 20-team league; the data source applies the date window
 DEFAULT_LEAGUE = "Premier League"  # sample-data label; for LiveDataSource this is an API-Football numeric league id
 
