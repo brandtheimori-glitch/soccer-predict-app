@@ -227,21 +227,26 @@ leagues, which is all the both-teams-to-score picks need.
    ```
 
 Responses are cached for 30 minutes, and one request per league returns
-the whole season, so a cold page load makes at most 7 requests (under the
+the whole season, so a cold page load makes at most 9 requests (under the
 free plan's 10/minute limit). The free plan has no betting odds, so in this
 mode predictions are model-only and no value bets are flagged.
 
 `API_FOOTBALL_KEY` (API-Football) is still supported for the odds/value-bet
 features, but its free plan may not include the current season.
 
-## Both-teams-to-score (BTTS) focus
+## Pick lists: both teams to score, and over/under 2.5 goals
 
-The top of the page lists the 10 most confident BTTS calls (Yes or No)
-across every league, sorted by how sure the model is. Every BTTS pick is
-logged before kickoff and graded after, and the "How BTTS picks have
-actually done" table shows the real hit rate at each confidence level
+The top of the page has two lists: the 10 most confident BTTS calls
+(Yes or No) and the 10 most confident over/under 2.5 goals calls, both
+covering every fixture in the next 14 days across all leagues (Premier
+League, La Liga, Serie A, Bundesliga, Ligue 1, Eredivisie, Championship,
+Primeira Liga and the Brasileirão, which keeps playing through European
+international breaks), sorted by how sure the model is. Over/under is graded
+on total goals: 3+ is "Over". Every pick is
+logged before kickoff and graded after, and each list's "How these picks
+have actually done" table shows the real hit rate at each confidence level
 (50%+, 55%+, 60%+, ...). That's how you can check whether sticking to
-the most confident picks really gives a higher win rate. Also at `/api/btts`.
+the most confident picks really gives a higher win rate. Also at `/api/btts` and `/api/over-under`.
 
 This is a separate decision from hosting it publicly (next section) — you
 can set `API_FOOTBALL_KEY` locally, on a free host, or not at all.

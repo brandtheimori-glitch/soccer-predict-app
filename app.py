@@ -23,11 +23,12 @@ from flask import Flask, jsonify, render_template, request
 
 import threshold_tuning
 import track_record
-from data_source import get_data_source
+from data_source import UPCOMING_DAYS, get_data_source
 from fit_parameters import fit_league_parameters
 from model import predict_match
 
 app = Flask(__name__)
+MAX_FIXTURES_PER_LEAGUE = 40  # two weeks of a 20-team league; the data source applies the date window
 DEFAULT_LEAGUE = "Premier League"  # sample-data label; for LiveDataSource this is an API-Football numeric league id
 
 
@@ -80,7 +81,7 @@ def build_predictions(league: str):
     value_threshold = threshold_tuning.active_threshold()
     seed_and_grade_history(ds, league, fit, value_threshold)
 
-    fixtures = ds.upcoming_fixtures(league, limit=10)
+    fixtures = ds.upcoming_fixtures(league, limit=MAX_FIXTURES_PER_LEAGUE)
     results = []
     for fx in fixtures:
         home = fit.team_strength(fx.home_team)
@@ -101,47 +102,60 @@ def build_predictions(league: str):
     return results, ds.label, ds.available_leagues(), fit
 
 
-TOP_BTTS_PICKS = 10  # how many of the most confident BTTS calls to feature
+TOP_PICKS = 10  # how many of the most confident calls to feature per market
 
 
-def top_btts_picks(limit: int = TOP_BTTS_PICKS) -> list[dict]:
-    """The most confident both-teams-to-score calls across EVERY league,
-    sorted most-sure first. Confidence is the model's probability for the
-    side it picks (Yes or No), so 0.70 means "70% sure"."""
+def all_upcoming() -> list[dict]:
+    """Every upcoming prediction across EVERY league (each tagged with its
+    league's display name)."""
     ds = get_data_source()
-    picks = []
+    out = []
     for lg in ds.available_leagues():
         try:
             preds, *_ = build_predictions(lg["id"])
         except Exception as exc:  # one league's data failing shouldn't blank the page
-            app.logger.warning("skipping %s for BTTS picks: %s", lg["name"], exc)
+            app.logger.warning("skipping %s: %s", lg["name"], exc)
             continue
-        for p in preds:
-            picks.append({**p, "league_name": lg["name"]})
-    picks.sort(key=lambda p: p["btts_confidence"], reverse=True)
-    return picks[:limit]
+        out.extend({**p, "league_name": lg["name"]} for p in preds)
+    return out
+
+
+def top_picks(preds: list[dict], market: str, limit: int = TOP_PICKS) -> list[dict]:
+    """The most confident calls for one market ("btts" or "ou"), most-sure
+    first. Confidence is the model's probability for the side it picks, so
+    0.70 means "70% sure"."""
+    return sorted(preds, key=lambda p: p[f"{market}_confidence"], reverse=True)[:limit]
 
 
 @app.route("/")
 def index():
     ds = get_data_source()
     league = resolve_league(ds)
-    btts_picks = top_btts_picks()
+    upcoming = all_upcoming()
+    btts_picks = top_picks(upcoming, "btts")
+    ou_picks = top_picks(upcoming, "ou")
     predictions, source_label, leagues, fit = build_predictions(league)
     record = track_record.summary()
     value_perf = track_record.value_bet_performance()
     btts_perf = track_record.btts_performance()
+    ou_perf = track_record.ou_performance()
     tuning = threshold_tuning.evaluate_thresholds()
     return render_template(
         "index.html", predictions=predictions, source_label=source_label,
         record=record, leagues=leagues, active_league=league, fit=fit,
         value_perf=value_perf, tuning=tuning, btts_picks=btts_picks, btts_perf=btts_perf,
+        ou_picks=ou_picks, ou_perf=ou_perf, upcoming_days=UPCOMING_DAYS,
     )
 
 
 @app.route("/api/btts")
 def api_btts():
-    return jsonify({"top_picks": top_btts_picks(), "performance": track_record.btts_performance()})
+    return jsonify({"top_picks": top_picks(all_upcoming(), "btts"), "performance": track_record.btts_performance()})
+
+
+@app.route("/api/over-under")
+def api_over_under():
+    return jsonify({"top_picks": top_picks(all_upcoming(), "ou"), "performance": track_record.ou_performance()})
 
 
 @app.route("/api/predictions")

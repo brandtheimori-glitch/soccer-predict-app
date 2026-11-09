@@ -29,6 +29,7 @@ import json
 import os
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -409,7 +410,10 @@ _FD_LEAGUES = [
     {"id": "FL1", "name": "Ligue 1"},
     {"id": "DED", "name": "Eredivisie"},
     {"id": "ELC", "name": "Championship"},
-]  # 7 leagues -> at most 7 calls on a cold cache, under the 10/min free cap
+    {"id": "PPL", "name": "Primeira Liga"},
+    {"id": "BSA", "name": "Brasileirão"},  # plays through the European international breaks
+]  # 9 leagues -> at most 9 calls on a cold cache, under the 10/min free cap
+UPCOMING_DAYS = 14  # show every fixture in the next two weeks, not just the next round
 _FD_UPCOMING = {"SCHEDULED", "TIMED"}
 
 
@@ -466,7 +470,9 @@ class FootballDataSource(DataSource):
         )
 
     def upcoming_fixtures(self, league: str, limit: int = 10) -> list[Fixture]:
-        upcoming = [m for m in self._matches(league) if m.get("status") in _FD_UPCOMING]
+        horizon = (datetime.now(timezone.utc) + timedelta(days=UPCOMING_DAYS)).strftime("%Y-%m-%d")
+        upcoming = [m for m in self._matches(league)
+                    if m.get("status") in _FD_UPCOMING and (m.get("utcDate") or "")[:10] <= horizon]
         upcoming.sort(key=lambda m: m.get("utcDate", ""))
         return [self._to_fixture(m, league) for m in upcoming[:limit]]
 
