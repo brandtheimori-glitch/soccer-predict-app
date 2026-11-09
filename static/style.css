@@ -126,7 +126,10 @@ main {
 
 .teams { font-weight: 600; font-size: 1.05rem; }
 .vs { color: var(--muted); font-weight: 400; margin: 0 0.4rem; }
-.date { color: var(--muted); font-size: 0.85rem; }
+.date { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.matches-head { max-width: 720px; margin: 1.5rem auto 0; padding: 0 1.5rem; }
+.matches-head h2 { margin: 0; font-size: 1.15rem; }
+.matches-head .league-picker { margin-top: 0.25rem; }
 
 .probs { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
 .bar-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 2px; }
@@ -247,6 +250,7 @@ footer {
 .btts-conf { grid-area: conf; font-weight: 700; font-size: 1.05rem; }
 .btts-match { grid-area: match; font-weight: 600; }
 .btts-meta { grid-area: meta; color: var(--muted); font-size: 0.8rem; }
+.nowrap { white-space: nowrap; }
 .btts-record { margin-top: 0.9rem; font-size: 0.9rem; }
 .btts-table { width: 100%; margin-top: 0.5rem; border-collapse: collapse; font-size: 0.85rem; }
 .btts-table th, .btts-table td { border: 1px solid var(--border); padding: 0.3rem 0.5rem; text-align: left; }
@@ -254,6 +258,8 @@ footer {
 @media (max-width: 520px) {
   .btts-section, .record-strip { margin-left: 1rem; margin-right: 1rem; }
   .market-tabs { padding: 0 1rem; }
+  .matches-head { padding: 0 1rem; }
+  .card-top { gap: 0.5rem; }
   .btts-row { grid-template-columns: 4.8rem 2.6rem 1fr; }
 }
 

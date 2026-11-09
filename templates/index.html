@@ -19,16 +19,6 @@
       <button id="install-app" class="install-btn" hidden>Install app</button>
     </div>
     <p class="source-tag">Data source: {{ source_label }}</p>
-    {% if leagues %}
-    <label class="league-picker">
-      League:
-      <select onchange="location.href = '/?league=' + encodeURIComponent(this.value)">
-        {% for l in leagues %}
-        <option value="{{ l.id }}" {% if l.id == active_league %}selected{% endif %}>{{ l.name }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    {% endif %}
   </header>
 
   {% macro market_box(title, picks, perf, market, label, pick_key, conf_key) %}
@@ -42,7 +32,7 @@
         <span class="btts-answer pick-{{ p[pick_key]|lower }}">{{ label }} {{ p[pick_key] }}</span>
         <span class="btts-conf">{{ (p[conf_key] * 100) | round(0) | int }}%</span>
         <span class="btts-match">{{ p.home_team }} vs {{ p.away_team }}</span>
-        <span class="btts-meta">{{ p.league_name }} · {{ p.date }}</span>
+        <span class="btts-meta">{{ p.league_name }} · <span class="nowrap">{{ p.date | nice_date }}</span></span>
       </li>
       {% endfor %}
     </ol>
@@ -78,8 +68,9 @@
   {% endmacro %}
 
   <nav class="market-tabs">
-    <a href="#btts">Both teams to score</a>
-    <a href="#ou">Over / Under 2.5</a>
+    <a href="#btts">BTTS</a>
+    <a href="#ou">Over/Under 2.5</a>
+    <a href="#matches">By league</a>
   </nav>
   <div id="btts">{{ market_box('Best "both teams to score" picks', btts_picks, btts_perf, 'btts', 'BTTS', 'btts_pick', 'btts_confidence') }}</div>
   <div id="ou">{{ market_box('Best over / under 2.5 goals picks', ou_picks, ou_perf, 'ou', '', 'ou_pick', 'ou_confidence') }}</div>
@@ -149,6 +140,21 @@
   </table>
   {% endif %}
 
+  <section id="matches" class="matches-head">
+    <h2>All matches by league</h2>
+    <p class="btts-sub">Every upcoming match in one league, with all its picks.</p>
+    {% if leagues %}
+    <label class="league-picker">
+      League:
+      <select onchange="location.href = '/?league=' + encodeURIComponent(this.value) + '#matches'">
+        {% for l in leagues %}
+        <option value="{{ l.id }}" {% if l.id == active_league %}selected{% endif %}>{{ l.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+  </section>
+
   <main>
     {% for p in predictions %}
     <article class="card">
@@ -158,7 +164,7 @@
           <span class="vs">vs</span>
           <span class="away">{{ p.away_team }}</span>
         </div>
-        <div class="date">{{ p.date }}</div>
+        <div class="date">{{ p.date | nice_date }}</div>
       </div>
 
       {% if p.value_bets %}
