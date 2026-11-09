@@ -284,15 +284,27 @@ rather use one of those (same general steps: connect a repo, point it at
 - **Cold starts.** Render's free tier spins a service down after periods
   of no traffic and takes 30-60 seconds to wake back up on the next
   request — expected on a free plan, not a bug.
-- **Ephemeral disk.** `predictions_log.json` and `cache/` live on local
-  disk, which free tiers do NOT persist across restarts or redeploys — the
-  track record and value-bet backtest will reset each time the service
-  restarts. Fine for demoing; if you want the track record to actually
-  accumulate over a real season, the fix is swapping `track_record.py`'s
-  flat-file storage for a small free-tier database (Render's free Postgres
-  expires after 90 days; a persistent external store like Supabase's free
-  tier doesn't) — a bigger change than the free hosting step itself, worth
-  doing only once you're confident this is worth running long-term.
+- **Ephemeral disk.** Without a database, `predictions_log.json` and
+  `cache/` live on local disk, which free tiers do NOT persist across
+  restarts or redeploys, so the track record resets each time.
+
+### Keeping the track record permanently (free)
+
+Set `DATABASE_URL` to a Postgres connection string and every prediction is
+stored as a database row instead of in the local file, so the record
+builds up across restarts and redeploys. A free **Neon** database
+(https://neon.tech) works well: it doesn't expire, unlike Render's free
+Postgres (deleted after 30 days).
+
+1. Sign up at https://neon.tech and create a project (any name; pick the
+   region closest to your Render service).
+2. Copy the connection string it shows (starts with `postgresql://`).
+3. In Render, add an environment variable `DATABASE_URL` with that string,
+   then save and redeploy.
+
+The table is created automatically on first use. If the database is ever
+unreachable, the site keeps working and just shows an empty record until it
+reconnects. A prediction already stored is never overwritten.
 
 ## Project layout
 
@@ -302,7 +314,7 @@ model.py             Poisson goal model + market-odds blending + full edge compu
 fit_parameters.py    Fits home advantage + team attack/defense from historical results, recency-weighted, with shrinkage
 threshold_tuning.py  Sweeps candidate value-bet edge thresholds (Bonferroni-corrected) against graded history
 data_source.py       SampleDataSource (demo, 5 leagues) and LiveDataSource (API-Football, cached)
-track_record.py      Logs every prediction and every model-vs-market edge, grades them, backtests value-bet ROI
+track_record.py      Logs every prediction (Postgres via DATABASE_URL, else a local JSON file), grades them, BTTS hit rates, value-bet ROI
 templates/, static/   Front end
 Procfile, render.yaml, .gitignore   Deployment config for a free host (Render)
 predictions_log.json  Created at runtime — the public prediction/result/edge log (gitignored, not in the repo)

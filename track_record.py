@@ -19,29 +19,121 @@ call about the price.
 from __future__ import annotations
 
 import json
+import logging
 import math
+import os
+import threading
 from pathlib import Path
 
 LOG_PATH = Path(__file__).parent / "predictions_log.json"
 MIN_VALUE_BETS_FOR_SIGNIFICANCE = 20  # don't claim "beats break-even" on a handful of bets
 BTTS_CONFIDENCE_LEVELS = [0.50, 0.55, 0.60, 0.65, 0.70]  # "only count picks at least this sure"
 
+# ---------------------------------------------------------------------------
+# Storage. Two interchangeable backends behind _load()/_save():
+#   - DATABASE_URL set (e.g. a free Neon Postgres): every entry is a row, so
+#     the track record SURVIVES restarts/redeploys on a free host.
+#   - otherwise: the flat predictions_log.json file (fine locally, but wiped
+#     whenever a free host restarts).
+# Entries are kept in memory after the first load, and only the entries
+# that actually changed are written back -- one page load can log dozens of
+# predictions, and re-reading/re-writing everything from a remote database
+# for each would be slow.
+# ---------------------------------------------------------------------------
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+log = logging.getLogger(__name__)
+_entries: list[dict] | None = None
+_lock = threading.Lock()
+
+
+_conn = None
+
+
+def _db():
+    """One reused connection (reopened if it dropped -- free databases like
+    Neon close idle connections). Opening a fresh TLS connection per write
+    would make a page that logs dozens of new predictions slow."""
+    global _conn
+    import psycopg  # only needed when a database is configured
+    if _conn is None or _conn.closed or _conn.broken:
+        _conn = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=15)
+        _conn.execute(
+            "CREATE TABLE IF NOT EXISTS predictions ("
+            " fixture_id TEXT PRIMARY KEY,"
+            " created_at TIMESTAMPTZ NOT NULL DEFAULT now(),"
+            " data JSONB NOT NULL)"
+        )
+    return _conn
+
+
+def _db_run(fn):
+    """Run fn(conn), retrying once on a fresh connection if the reused one
+    turned out to be stale."""
+    global _conn
+    try:
+        return fn(_db())
+    except Exception:
+        _conn = None
+        return fn(_db())
+
 
 def _load() -> list[dict]:
-    if not LOG_PATH.exists():
-        return []
-    return json.loads(LOG_PATH.read_text())
+    global _entries
+    if _entries is None:
+        if DATABASE_URL:
+            try:
+                rows = _db_run(lambda conn: conn.execute(
+                    "SELECT data FROM predictions ORDER BY created_at, fixture_id").fetchall())
+            except Exception:
+                # database unreachable: serve the page with an empty record
+                # for now and retry on the next request (nothing is cached)
+                log.exception("could not load the track record from the database")
+                return []
+            _entries = [r[0] for r in rows]
+        elif LOG_PATH.exists():
+            _entries = json.loads(LOG_PATH.read_text())
+        else:
+            _entries = []
+    return _entries
 
 
-def _save(entries: list[dict]) -> None:
-    LOG_PATH.write_text(json.dumps(entries, indent=2))
+def _save(entries: list[dict], changed: list[dict], new: bool) -> None:
+    """new=True: brand-new predictions -- never replace a row that already
+    exists (a prediction is never overwritten after the fact, even if this
+    process somehow didn't see it). new=False: grading results for rows
+    that already exist."""
+    if not changed:
+        return
+    if DATABASE_URL:
+        from psycopg.types.json import Jsonb
+        on_conflict = "DO NOTHING" if new else "DO UPDATE SET data = EXCLUDED.data"
+        try:
+            def write(conn):
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        "INSERT INTO predictions (fixture_id, data) VALUES (%s, %s) "
+                        f"ON CONFLICT (fixture_id) {on_conflict}",
+                        [(e["fixture_id"], Jsonb(e)) for e in changed],
+                    )
+            _db_run(write)
+        except Exception:
+            # keep serving the page; the in-memory copy still has the change
+            # and the next successful write of that entry will persist it
+            log.exception("could not write %d track-record entries to the database", len(changed))
+    else:
+        LOG_PATH.write_text(json.dumps(entries, indent=2))
 
 
 def log_prediction(fixture_id: str, home_team: str, away_team: str, prediction: dict) -> None:
+    with _lock:
+        _log_prediction(fixture_id, home_team, away_team, prediction)
+
+
+def _log_prediction(fixture_id: str, home_team: str, away_team: str, prediction: dict) -> None:
     entries = _load()
     if any(e["fixture_id"] == fixture_id for e in entries):
         return  # already logged; never overwrite a prediction after the fact
-    entries.append({
+    entry = {
         "fixture_id": fixture_id,
         "home_team": home_team,
         "away_team": away_team,
@@ -65,8 +157,9 @@ def log_prediction(fixture_id: str, home_team: str, away_team: str, prediction: 
         "graded": False,
         "correct": None,
         "actual_score": None,
-    })
-    _save(entries)
+    }
+    entries.append(entry)
+    _save(entries, [entry], new=True)
 
 
 def _grade_edge_list(edges: list[dict], actual_outcome: str) -> None:
@@ -77,7 +170,13 @@ def _grade_edge_list(edges: list[dict], actual_outcome: str) -> None:
 
 
 def grade(fixture_id: str, home_goals: int, away_goals: int) -> None:
+    with _lock:
+        _grade(fixture_id, home_goals, away_goals)
+
+
+def _grade(fixture_id: str, home_goals: int, away_goals: int) -> None:
     entries = _load()
+    changed = []
     for e in entries:
         if e["fixture_id"] == fixture_id and not e["graded"]:
             if home_goals > away_goals:
@@ -94,7 +193,8 @@ def grade(fixture_id: str, home_goals: int, away_goals: int) -> None:
                 e["btts_correct"] = (e["btts_pick"] == "Yes") == both_scored
             _grade_edge_list(e["value_bets"], actual)
             _grade_edge_list(e.get("all_edges", []), actual)
-    _save(entries)
+            changed.append(e)
+    _save(entries, changed, new=False)
 
 
 def ungraded_fixture_ids() -> list[str]:
