@@ -1,0 +1,13 @@
+# Render "Blueprint" config -- lets Render auto-configure a free web service
+# from this repo instead of clicking through the New Web Service form by hand.
+# API_FOOTBALL_KEY is intentionally NOT listed here: the app runs fine without
+# it (falls back to bundled sample data), so it's left as an optional env var
+# to add later from the service's Environment tab in the Render dashboard,
+# rather than forcing it during the blueprint setup step.
+services:
+  - type: web
+    name: soccer-predictions
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
