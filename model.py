@@ -35,7 +35,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Optional
 
-from fit_parameters import TeamStrength  # re-exported for convenience
+from fit_parameters import TeamStrength, side_multipliers  # TeamStrength re-exported for convenience
 
 MAX_GOALS = 8          # highest scoreline considered per side when building the matrix
 MODEL_WEIGHT = 0.65     # weight given to the stats model vs. the market odds (0..1)
@@ -141,10 +141,12 @@ class Prediction:
 def expected_goals(home: TeamStrength, away: TeamStrength, avg_goals: float,
                     home_advantage: float) -> tuple[float, float]:
     """Combine attack/defense strengths into expected goals for each side.
-    home_advantage is the ONLY lift the home side gets — see the module
-    changelog note above for why that matters."""
-    home_xg = avg_goals * home_advantage * home.attack * away.defense
-    away_xg = avg_goals * away.attack * home.defense
+    home_advantage is the home/away goal ratio; it lifts the home side and
+    lowers the away side by matching amounts, so the match total stays
+    anchored to the league's real scoring rate."""
+    home_mult, away_mult = side_multipliers(home_advantage)
+    home_xg = avg_goals * home_mult * home.attack * away.defense
+    away_xg = avg_goals * away_mult * away.attack * home.defense
     return home_xg, away_xg
 
 
