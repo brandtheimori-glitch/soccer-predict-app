@@ -148,6 +148,16 @@ def index():
     )
 
 
+@app.route("/sw.js")
+def service_worker():
+    """Served from the site root (not /static/) so it can control the whole
+    app -- required for the browser to offer installing it."""
+    resp = app.send_static_file("sw.js")
+    resp.headers["Content-Type"] = "application/javascript"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 @app.route("/api/btts")
 def api_btts():
     return jsonify({"top_picks": top_picks(all_upcoming(), "btts"), "performance": track_record.btts_performance()})
