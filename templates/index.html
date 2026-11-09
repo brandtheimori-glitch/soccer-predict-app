@@ -21,6 +21,50 @@
     {% endif %}
   </header>
 
+  <section class="btts-section">
+    <h2>Best "both teams to score" picks — all leagues</h2>
+    <p class="btts-sub">Sorted by how sure the model is. Higher % = stronger pick.</p>
+    {% if btts_picks %}
+    <ol class="btts-list">
+      {% for p in btts_picks %}
+      <li class="btts-row">
+        <span class="btts-answer btts-{{ p.btts_pick|lower }}">BTTS {{ p.btts_pick }}</span>
+        <span class="btts-conf">{{ (p.btts_confidence * 100) | round(0) | int }}%</span>
+        <span class="btts-match">{{ p.home_team }} vs {{ p.away_team }}</span>
+        <span class="btts-meta">{{ p.league_name }} · {{ p.date }}</span>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p>No upcoming matches found right now.</p>
+    {% endif %}
+
+    <div class="btts-record">
+      <strong>How BTTS picks have actually done:</strong>
+      {% if btts_perf.graded %}
+        {{ btts_perf.hits }}/{{ btts_perf.graded }} right ({{ (btts_perf.hit_rate * 100) | round(1) }}%).
+        <table class="btts-table">
+          <thead><tr><th>Only picks at least…</th><th>Picks</th><th>Right</th><th>Hit rate</th></tr></thead>
+          <tbody>
+          {% for lvl in btts_perf.by_confidence %}
+            <tr>
+              <td>{{ (lvl.min_confidence * 100) | round(0) | int }}% sure</td>
+              <td>{{ lvl.picks }}</td>
+              <td>{{ lvl.hits }}</td>
+              <td>{% if lvl.hit_rate is not none %}{{ (lvl.hit_rate * 100) | round(1) }}%{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% if not btts_perf.enough_data %}
+        <span class="verdict">Only {{ btts_perf.graded }} graded so far. Treat these rates as early until there are at least {{ btts_perf.min_for_trust }}.</span>
+        {% endif %}
+      {% else %}
+        nothing graded yet. Results fill in automatically after each match finishes.
+      {% endif %}
+    </div>
+  </section>
+
   <section class="record-strip">
     <strong>Track record:</strong>
     {% if record.graded %}
@@ -124,6 +168,10 @@
         Pick: <strong>{{ p.pick }}</strong> ·
         Predicted score: <strong>{{ p.top_scorelines[0].score if p.top_scorelines else "—" }}</strong> ·
         Confidence: <strong class="conf-{{ p.confidence|lower }}">{{ p.confidence }}</strong>
+      </div>
+      <div class="quick-answer">
+        Both teams to score: <strong class="btts-{{ p.btts_pick|lower }}-text">{{ p.btts_pick }}</strong>
+        ({{ (p.btts_confidence * 100) | round(0) | int }}% sure)
       </div>
 
       <button class="why-toggle">why? ▾</button>

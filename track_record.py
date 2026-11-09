@@ -24,6 +24,7 @@ from pathlib import Path
 
 LOG_PATH = Path(__file__).parent / "predictions_log.json"
 MIN_VALUE_BETS_FOR_SIGNIFICANCE = 20  # don't claim "beats break-even" on a handful of bets
+BTTS_CONFIDENCE_LEVELS = [0.50, 0.55, 0.60, 0.65, 0.70]  # "only count picks at least this sure"
 
 
 def _load() -> list[dict]:
@@ -49,6 +50,10 @@ def log_prediction(fixture_id: str, home_team: str, away_team: str, prediction: 
         "p_draw": prediction["p_draw"],
         "p_away": prediction["p_away"],
         "predicted_score": prediction["top_scorelines"][0]["score"] if prediction["top_scorelines"] else None,
+        "btts_pick": prediction.get("btts_pick"),
+        "btts_confidence": prediction.get("btts_confidence"),
+        "btts_correct": None,
+        "date": prediction.get("date"),
         # snapshot of value bets AS FLAGGED AT PREDICTION TIME (under whatever
         # threshold was active then) — odds/probabilities here never change
         # after logging, only "won"/"return" get filled in on grade()
@@ -84,6 +89,9 @@ def grade(fixture_id: str, home_goals: int, away_goals: int) -> None:
             e["graded"] = True
             e["correct"] = (e["pick"] == actual)
             e["actual_score"] = f"{home_goals}-{away_goals}"
+            if e.get("btts_pick"):
+                both_scored = home_goals > 0 and away_goals > 0
+                e["btts_correct"] = (e["btts_pick"] == "Yes") == both_scored
             _grade_edge_list(e["value_bets"], actual)
             _grade_edge_list(e.get("all_edges", []), actual)
     _save(entries)
@@ -116,6 +124,37 @@ def summary() -> dict:
         "correct": len(correct),
         "accuracy": round(len(correct) / len(graded), 3) if graded else None,
         "entries": list(reversed(entries)),
+    }
+
+
+def btts_performance() -> dict:
+    """
+    Both-teams-to-score hit rate, overall AND restricted to the picks the
+    model was most sure about. The point of the breakdown: if picks at 65%+
+    confidence really do land more often than picks at 50-55%, sticking to
+    the high-confidence ones is how to get the higher win rate -- and this
+    shows whether that's actually happening, from real graded results,
+    instead of assuming it.
+    """
+    graded = [e for e in _load() if e["graded"] and e.get("btts_correct") is not None]
+    levels = []
+    for level in BTTS_CONFIDENCE_LEVELS:
+        picks = [e for e in graded if (e.get("btts_confidence") or 0) >= level]
+        hits = sum(1 for e in picks if e["btts_correct"])
+        levels.append({
+            "min_confidence": level,
+            "picks": len(picks),
+            "hits": hits,
+            "hit_rate": round(hits / len(picks), 3) if picks else None,
+        })
+    hits = sum(1 for e in graded if e["btts_correct"])
+    return {
+        "graded": len(graded),
+        "hits": hits,
+        "hit_rate": round(hits / len(graded), 3) if graded else None,
+        "by_confidence": levels,
+        "enough_data": len(graded) >= MIN_VALUE_BETS_FOR_SIGNIFICANCE,
+        "min_for_trust": MIN_VALUE_BETS_FOR_SIGNIFICANCE,
     }
 
 

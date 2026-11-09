@@ -11,10 +11,11 @@ Run:
     python app.py
 Then open http://localhost:5000
 
-To go live instead of the bundled sample data, sign up for a free key at
-https://dashboard.api-football.com (100 requests/day, no card required)
-and run with:
-    API_FOOTBALL_KEY=xxxx python app.py
+To go live with real fixtures, get a free key at
+https://www.football-data.org/client/register (email only, no card) and run:
+    FOOTBALL_DATA_KEY=xxxx python app.py
+(API_FOOTBALL_KEY still works too, but its free plan may not cover the
+current season, so football-data.org is the recommended free option.)
 """
 from __future__ import annotations
 
@@ -100,19 +101,47 @@ def build_predictions(league: str):
     return results, ds.label, ds.available_leagues(), fit
 
 
+TOP_BTTS_PICKS = 10  # how many of the most confident BTTS calls to feature
+
+
+def top_btts_picks(limit: int = TOP_BTTS_PICKS) -> list[dict]:
+    """The most confident both-teams-to-score calls across EVERY league,
+    sorted most-sure first. Confidence is the model's probability for the
+    side it picks (Yes or No), so 0.70 means "70% sure"."""
+    ds = get_data_source()
+    picks = []
+    for lg in ds.available_leagues():
+        try:
+            preds, *_ = build_predictions(lg["id"])
+        except Exception as exc:  # one league's data failing shouldn't blank the page
+            app.logger.warning("skipping %s for BTTS picks: %s", lg["name"], exc)
+            continue
+        for p in preds:
+            picks.append({**p, "league_name": lg["name"]})
+    picks.sort(key=lambda p: p["btts_confidence"], reverse=True)
+    return picks[:limit]
+
+
 @app.route("/")
 def index():
     ds = get_data_source()
     league = resolve_league(ds)
+    btts_picks = top_btts_picks()
     predictions, source_label, leagues, fit = build_predictions(league)
     record = track_record.summary()
     value_perf = track_record.value_bet_performance()
+    btts_perf = track_record.btts_performance()
     tuning = threshold_tuning.evaluate_thresholds()
     return render_template(
         "index.html", predictions=predictions, source_label=source_label,
         record=record, leagues=leagues, active_league=league, fit=fit,
-        value_perf=value_perf, tuning=tuning,
+        value_perf=value_perf, tuning=tuning, btts_picks=btts_picks, btts_perf=btts_perf,
     )
+
+
+@app.route("/api/btts")
+def api_btts():
+    return jsonify({"top_picks": top_btts_picks(), "performance": track_record.btts_performance()})
 
 
 @app.route("/api/predictions")

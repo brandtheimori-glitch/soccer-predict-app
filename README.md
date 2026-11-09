@@ -206,15 +206,33 @@ League dropdown at the top to switch between them.
 
 ### Going live with real data
 
-1. Get a free key at https://dashboard.api-football.com (no card needed,
-   100 requests/day).
-2. Run with the key set:
+Recommended: **football-data.org** (free, email signup, no card). Its free
+plan has real fixtures and results for the current season of the top
+leagues, which is all the both-teams-to-score picks need.
+
+1. Register at https://www.football-data.org/client/register. The key
+   arrives by email.
+2. Run with the key set (or add it as an environment variable on your host):
    ```bash
-   API_FOOTBALL_KEY=your_key_here python app.py
+   FOOTBALL_DATA_KEY=your_key_here python app.py
    ```
-3. The league picker will then list API-Football's numeric IDs for the
-   same five leagues (see `_LIVE_LEAGUES` in `data_source.py` to add more —
-   find IDs at https://www.api-football.com/documentation-v3#tag/Leagues).
+
+Responses are cached for 30 minutes, and one request per league returns
+the whole season, so a cold page load makes at most 7 requests (under the
+free plan's 10/minute limit). The free plan has no betting odds, so in this
+mode predictions are model-only and no value bets are flagged.
+
+`API_FOOTBALL_KEY` (API-Football) is still supported for the odds/value-bet
+features, but its free plan may not include the current season.
+
+## Both-teams-to-score (BTTS) focus
+
+The top of the page lists the 10 most confident BTTS calls (Yes or No)
+across every league, sorted by how sure the model is. Every BTTS pick is
+logged before kickoff and graded after, and the "How BTTS picks have
+actually done" table shows the real hit rate at each confidence level
+(50%+, 55%+, 60%+, ...). That's how you can check whether sticking to
+the most confident picks really gives a higher win rate. Also at `/api/btts`.
 
 This is a separate decision from hosting it publicly (next section) — you
 can set `API_FOOTBALL_KEY` locally, on a free host, or not at all.

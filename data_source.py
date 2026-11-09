@@ -384,7 +384,128 @@ class LiveDataSource(DataSource):
             return None
 
 
+# ---------------------------------------------------------------------------
+# Live data source — football-data.org (recommended free option).
+# ---------------------------------------------------------------------------
+# Free plan: real fixtures + results for the CURRENT season of the top
+# competitions, 10 requests/minute, no card. Sign up (email only) at
+# https://www.football-data.org/client/register — the key arrives by email.
+# It has no betting odds on the free plan, which is fine for the
+# both-teams-to-score focus: BTTS comes straight from the goal model.
+#
+# One call per competition returns the whole season (finished AND upcoming
+# matches), so a single cached request covers fitting, upcoming predictions
+# and grading for that league.
+
+FOOTBALL_DATA_KEY = os.environ.get("FOOTBALL_DATA_KEY", "")
+FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
+FOOTBALL_DATA_CACHE_TTL_MINUTES = 30  # results land within the hour; keeps well under 10 req/min
+
+_FD_LEAGUES = [
+    {"id": "PL", "name": "Premier League"},
+    {"id": "PD", "name": "La Liga"},
+    {"id": "SA", "name": "Serie A"},
+    {"id": "BL1", "name": "Bundesliga"},
+    {"id": "FL1", "name": "Ligue 1"},
+    {"id": "DED", "name": "Eredivisie"},
+    {"id": "ELC", "name": "Championship"},
+]  # 7 leagues -> at most 7 calls on a cold cache, under the 10/min free cap
+_FD_UPCOMING = {"SCHEDULED", "TIMED"}
+
+
+def _fd_team(team: dict) -> str:
+    return team.get("shortName") or team.get("name") or "Unknown"
+
+
+class FootballDataSource(DataSource):
+    label = "live via football-data.org"
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        CACHE_DIR.mkdir(exist_ok=True)
+
+    def available_leagues(self) -> list[dict]:
+        return _FD_LEAGUES
+
+    def _matches(self, league: str) -> list[dict]:
+        """Every match of the competition's current season (cached)."""
+        cache_file = CACHE_DIR / f"fd_{league}_matches.json"
+        if cache_file.exists():
+            age_min = (time.time() - cache_file.stat().st_mtime) / 60
+            if age_min < FOOTBALL_DATA_CACHE_TTL_MINUTES:
+                return json.loads(cache_file.read_text()).get("matches", [])
+        try:
+            resp = requests.get(
+                f"{FOOTBALL_DATA_BASE}/competitions/{league}/matches",
+                headers={"X-Auth-Token": self.api_key},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.RequestException, ValueError):
+            # rate-limited / network blip: serve the stale cache rather than crash
+            if cache_file.exists():
+                return json.loads(cache_file.read_text()).get("matches", [])
+            raise
+        cache_file.write_text(json.dumps(data))
+        return data.get("matches", [])
+
+    @staticmethod
+    def _full_time(m: dict) -> tuple[Optional[int], Optional[int]]:
+        ft = (m.get("score") or {}).get("fullTime") or {}
+        return ft.get("home"), ft.get("away")
+
+    def _to_fixture(self, m: dict, league: str) -> Fixture:
+        hg, ag = self._full_time(m)
+        finished = m.get("status") == "FINISHED"
+        return Fixture(
+            fixture_id=f"fd{m['id']}", league=league, date=(m.get("utcDate") or "")[:10],
+            home_team=_fd_team(m.get("homeTeam", {})), away_team=_fd_team(m.get("awayTeam", {})),
+            status="FT" if finished else ("NS" if m.get("status") in _FD_UPCOMING else m.get("status", "")),
+            home_goals=hg if finished else None, away_goals=ag if finished else None,
+        )
+
+    def upcoming_fixtures(self, league: str, limit: int = 10) -> list[Fixture]:
+        upcoming = [m for m in self._matches(league) if m.get("status") in _FD_UPCOMING]
+        upcoming.sort(key=lambda m: m.get("utcDate", ""))
+        return [self._to_fixture(m, league) for m in upcoming[:limit]]
+
+    def historical_matches(self, league: str) -> list[HistoricalMatch]:
+        out = []
+        for m in self._matches(league):
+            hg, ag = self._full_time(m)
+            if m.get("status") == "FINISHED" and hg is not None and ag is not None:
+                out.append(HistoricalMatch(
+                    home_team=_fd_team(m.get("homeTeam", {})), away_team=_fd_team(m.get("awayTeam", {})),
+                    home_goals=hg, away_goals=ag, date=(m.get("utcDate") or "")[:10],
+                ))
+        return out
+
+    def finished_fixtures_needing_grade(self, fixture_ids: list[str]) -> list[Fixture]:
+        wanted = {fid for fid in fixture_ids if fid.startswith("fd")}
+        if not wanted:
+            return []
+        out = []
+        for lg in _FD_LEAGUES:
+            if not (CACHE_DIR / f"fd_{lg['id']}_matches.json").exists():
+                continue  # never predicted anything there yet -> nothing to grade
+            try:
+                matches = self._matches(lg["id"])
+            except requests.RequestException:
+                continue
+            for m in matches:
+                fx = self._to_fixture(m, lg["id"])
+                if fx.fixture_id in wanted and fx.status == "FT" and fx.home_goals is not None:
+                    out.append(fx)
+        return out
+
+    def odds(self, fixture_id: str) -> Optional[OddsSnapshot]:
+        return None  # not on football-data.org's free plan
+
+
 def get_data_source() -> DataSource:
+    if FOOTBALL_DATA_KEY:
+        return FootballDataSource(FOOTBALL_DATA_KEY)
     if API_FOOTBALL_KEY:
         return LiveDataSource(API_FOOTBALL_KEY)
     return SampleDataSource()

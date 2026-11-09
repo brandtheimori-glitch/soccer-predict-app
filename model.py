@@ -90,6 +90,16 @@ class Prediction:
         return "Low"
 
     @property
+    def btts_pick(self) -> str:
+        """'Yes' if both teams scoring is more likely than not, else 'No'."""
+        return "Yes" if self.btts >= 0.5 else "No"
+
+    @property
+    def btts_confidence(self) -> float:
+        """Probability of whichever BTTS side is picked (always >= 0.5)."""
+        return max(self.btts, 1 - self.btts)
+
+    @property
     def pick(self) -> str:
         probs = {"Home": self.p_home, "Draw": self.p_draw, "Away": self.p_away}
         return max(probs, key=probs.get)
@@ -111,6 +121,8 @@ class Prediction:
             ],
             "over_2_5": round(self.over_2_5, 3),
             "btts": round(self.btts, 3),
+            "btts_pick": self.btts_pick,
+            "btts_confidence": round(self.btts_confidence, 3),
             "market_probs": (
                 {
                     "home": round(self.market_probs[0], 3),
