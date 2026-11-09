@@ -1,0 +1,52 @@
+# Copy this file to config.yaml and fill it in. config.yaml is git-ignored —
+# never commit it, it holds your passwords.
+
+# Leave this TRUE until you've watched the log and the parsed signals look right.
+dry_run: true
+
+telegram:
+  # Get these at https://my.telegram.org -> "API development tools"
+  api_id: 1234567
+  api_hash: "0123456789abcdef0123456789abcdef"
+  phone: "+15551234567"          # your Telegram number, with country code
+  session_name: signal_session    # creates signal_session.session (keep it private!)
+  # The group to copy. Use the numeric id from `python list_chats.py`
+  # (e.g. -1001234567890) or its @username / t.me link if it has one.
+  chat: -1001234567890
+
+mt5:
+  # Optional if the MT5 terminal is already open and logged in.
+  terminal_path: 'C:\Program Files\MetaTrader 5\terminal64.exe'
+  login: 12345678
+  password: "your-mt5-password"
+  server: "YourBroker-Demo"
+  magic: 20261109                 # tags the bot's trades so it never touches yours
+  deviation_points: 20            # max slippage for market orders, in points
+  # Brokers often name symbols differently, e.g. XAUUSD.m or XAUUSDm.
+  symbol_prefix: ""
+  symbol_suffix: ""
+  symbol_map:                     # exact overrides, signal name -> broker name
+    # XAUUSD: GOLD
+    # US30: DJ30
+
+risk:
+  mode: fixed                     # "fixed" or "risk_percent"
+  fixed_lot: 0.01                 # total lots per signal in fixed mode
+  risk_percent: 1.0               # % of balance lost if SL is hit (risk_percent mode)
+  max_lot: 1.0                    # hard cap on total lots per signal
+  max_open_trades: 6              # bot positions open at once (0 = no limit)
+  max_tps: 3                      # split the lot across at most this many TPs
+  require_sl: true                # skip signals that don't give a stop loss
+  # Skip a market signal if price has moved more than this (in price units,
+  # e.g. 3.0 = $3 on gold, 0.0015 = 15 pips on EURUSD) from the quoted entry.
+  # 0 disables the check.
+  max_entry_distance: 3.0
+  allowed_symbols: []             # e.g. [XAUUSD, EURUSD]; empty = any
+  # If false, "close all" / "move SL to BE" only act when the message is a reply
+  # to a signal or names a symbol. True lets them act on every bot trade.
+  allow_global_commands: false
+
+parser:
+  aliases:                        # extra nicknames the group uses
+    # JAPAN: JP225
+  extra_symbols: []               # symbols that aren't standard FX pairs, e.g. [BOOM1000, V75]
