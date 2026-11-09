@@ -207,10 +207,30 @@ footer {
   border-radius: 6px;
   color: #fff;
 }
-.btts-yes { background: var(--high); }
-.btts-no { background: var(--away); }
-.btts-yes-text { color: var(--high); }
-.btts-no-text { color: var(--away); }
+.pick-yes, .pick-over { background: var(--high); }
+.pick-no, .pick-under { background: var(--away); }
+.pick-yes-text, .pick-over-text { color: var(--high); }
+.pick-no-text, .pick-under-text { color: var(--away); }
+
+.market-tabs {
+  max-width: 720px;
+  margin: 1rem auto 0;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0 1.5rem;
+}
+.market-tabs a {
+  flex: 1;
+  text-align: center;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
 .btts-conf { grid-area: conf; font-weight: 700; font-size: 1.05rem; }
 .btts-match { grid-area: match; font-weight: 600; }
 .btts-meta { grid-area: meta; color: var(--muted); font-size: 0.8rem; }
@@ -220,6 +240,7 @@ footer {
 
 @media (max-width: 520px) {
   .btts-section, .record-strip { margin-left: 1rem; margin-right: 1rem; }
+  .market-tabs { padding: 0 1rem; }
   .btts-row { grid-template-columns: 4.8rem 2.6rem 1fr; }
 }
 

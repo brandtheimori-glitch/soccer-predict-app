@@ -21,15 +21,16 @@
     {% endif %}
   </header>
 
+  {% macro market_box(title, picks, perf, market, label, pick_key, conf_key) %}
   <section class="btts-section">
-    <h2>Best "both teams to score" picks — all leagues</h2>
-    <p class="btts-sub">Sorted by how sure the model is. Higher % = stronger pick.</p>
-    {% if btts_picks %}
+    <h2>{{ title }}</h2>
+    <p class="btts-sub">Next {{ upcoming_days }} days, all leagues, sorted by how sure the model is. Higher % = stronger pick.</p>
+    {% if picks %}
     <ol class="btts-list">
-      {% for p in btts_picks %}
+      {% for p in picks %}
       <li class="btts-row">
-        <span class="btts-answer btts-{{ p.btts_pick|lower }}">BTTS {{ p.btts_pick }}</span>
-        <span class="btts-conf">{{ (p.btts_confidence * 100) | round(0) | int }}%</span>
+        <span class="btts-answer pick-{{ p[pick_key]|lower }}">{{ label }} {{ p[pick_key] }}</span>
+        <span class="btts-conf">{{ (p[conf_key] * 100) | round(0) | int }}%</span>
         <span class="btts-match">{{ p.home_team }} vs {{ p.away_team }}</span>
         <span class="btts-meta">{{ p.league_name }} · {{ p.date }}</span>
       </li>
@@ -40,13 +41,13 @@
     {% endif %}
 
     <div class="btts-record">
-      <strong>How BTTS picks have actually done:</strong>
-      {% if btts_perf.graded %}
-        {{ btts_perf.hits }}/{{ btts_perf.graded }} right ({{ (btts_perf.hit_rate * 100) | round(1) }}%).
+      <strong>How these picks have actually done:</strong>
+      {% if perf.graded %}
+        {{ perf.hits }}/{{ perf.graded }} right ({{ (perf.hit_rate * 100) | round(1) }}%).
         <table class="btts-table">
           <thead><tr><th>Only picks at least…</th><th>Picks</th><th>Right</th><th>Hit rate</th></tr></thead>
           <tbody>
-          {% for lvl in btts_perf.by_confidence %}
+          {% for lvl in perf.by_confidence %}
             <tr>
               <td>{{ (lvl.min_confidence * 100) | round(0) | int }}% sure</td>
               <td>{{ lvl.picks }}</td>
@@ -56,14 +57,22 @@
           {% endfor %}
           </tbody>
         </table>
-        {% if not btts_perf.enough_data %}
-        <span class="verdict">Only {{ btts_perf.graded }} graded so far. Treat these rates as early until there are at least {{ btts_perf.min_for_trust }}.</span>
+        {% if not perf.enough_data %}
+        <span class="verdict">Only {{ perf.graded }} graded so far. Treat these rates as early until there are at least {{ perf.min_for_trust }}.</span>
         {% endif %}
       {% else %}
         nothing graded yet. Results fill in automatically after each match finishes.
       {% endif %}
     </div>
   </section>
+  {% endmacro %}
+
+  <nav class="market-tabs">
+    <a href="#btts">Both teams to score</a>
+    <a href="#ou">Over / Under 2.5</a>
+  </nav>
+  <div id="btts">{{ market_box('Best "both teams to score" picks', btts_picks, btts_perf, 'btts', 'BTTS', 'btts_pick', 'btts_confidence') }}</div>
+  <div id="ou">{{ market_box('Best over / under 2.5 goals picks', ou_picks, ou_perf, 'ou', '', 'ou_pick', 'ou_confidence') }}</div>
 
   <section class="record-strip">
     <strong>Track record:</strong>
@@ -170,8 +179,10 @@
         Confidence: <strong class="conf-{{ p.confidence|lower }}">{{ p.confidence }}</strong>
       </div>
       <div class="quick-answer">
-        Both teams to score: <strong class="btts-{{ p.btts_pick|lower }}-text">{{ p.btts_pick }}</strong>
-        ({{ (p.btts_confidence * 100) | round(0) | int }}% sure)
+        Both teams to score: <strong class="pick-{{ p.btts_pick|lower }}-text">{{ p.btts_pick }}</strong>
+        ({{ (p.btts_confidence * 100) | round(0) | int }}% sure) ·
+        2.5 goals: <strong class="pick-{{ p.ou_pick|lower }}-text">{{ p.ou_pick }}</strong>
+        ({{ (p.ou_confidence * 100) | round(0) | int }}% sure)
       </div>
 
       <button class="why-toggle">why? ▾</button>

@@ -145,6 +145,9 @@ def _log_prediction(fixture_id: str, home_team: str, away_team: str, prediction:
         "btts_pick": prediction.get("btts_pick"),
         "btts_confidence": prediction.get("btts_confidence"),
         "btts_correct": None,
+        "ou_pick": prediction.get("ou_pick"),
+        "ou_confidence": prediction.get("ou_confidence"),
+        "ou_correct": None,
         "date": prediction.get("date"),
         # snapshot of value bets AS FLAGGED AT PREDICTION TIME (under whatever
         # threshold was active then) — odds/probabilities here never change
@@ -191,6 +194,9 @@ def _grade(fixture_id: str, home_goals: int, away_goals: int) -> None:
             if e.get("btts_pick"):
                 both_scored = home_goals > 0 and away_goals > 0
                 e["btts_correct"] = (e["btts_pick"] == "Yes") == both_scored
+            if e.get("ou_pick"):
+                over = home_goals + away_goals > 2
+                e["ou_correct"] = (e["ou_pick"] == "Over") == over
             _grade_edge_list(e["value_bets"], actual)
             _grade_edge_list(e.get("all_edges", []), actual)
             changed.append(e)
@@ -227,27 +233,28 @@ def summary() -> dict:
     }
 
 
-def btts_performance() -> dict:
+def market_performance(market: str) -> dict:
     """
-    Both-teams-to-score hit rate, overall AND restricted to the picks the
-    model was most sure about. The point of the breakdown: if picks at 65%+
-    confidence really do land more often than picks at 50-55%, sticking to
-    the high-confidence ones is how to get the higher win rate -- and this
-    shows whether that's actually happening, from real graded results,
-    instead of assuming it.
+    Hit rate for one pick market ("btts" = both teams to score, "ou" = over/
+    under 2.5 goals), overall AND restricted to the picks the model was most
+    sure about. If picks at 65%+ confidence really do land more often than
+    picks at 50-55%, sticking to the high-confidence ones is how to get the
+    higher win rate -- and this shows whether that's actually happening,
+    from real graded results, instead of assuming it.
     """
-    graded = [e for e in _load() if e["graded"] and e.get("btts_correct") is not None]
+    correct_key, conf_key = f"{market}_correct", f"{market}_confidence"
+    graded = [e for e in _load() if e["graded"] and e.get(correct_key) is not None]
     levels = []
     for level in BTTS_CONFIDENCE_LEVELS:
-        picks = [e for e in graded if (e.get("btts_confidence") or 0) >= level]
-        hits = sum(1 for e in picks if e["btts_correct"])
+        picks = [e for e in graded if (e.get(conf_key) or 0) >= level]
+        hits = sum(1 for e in picks if e[correct_key])
         levels.append({
             "min_confidence": level,
             "picks": len(picks),
             "hits": hits,
             "hit_rate": round(hits / len(picks), 3) if picks else None,
         })
-    hits = sum(1 for e in graded if e["btts_correct"])
+    hits = sum(1 for e in graded if e[correct_key])
     return {
         "graded": len(graded),
         "hits": hits,
@@ -256,6 +263,14 @@ def btts_performance() -> dict:
         "enough_data": len(graded) >= MIN_VALUE_BETS_FOR_SIGNIFICANCE,
         "min_for_trust": MIN_VALUE_BETS_FOR_SIGNIFICANCE,
     }
+
+
+def btts_performance() -> dict:
+    return market_performance("btts")
+
+
+def ou_performance() -> dict:
+    return market_performance("ou")
 
 
 def value_bet_performance() -> dict:
