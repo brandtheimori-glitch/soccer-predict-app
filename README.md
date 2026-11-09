@@ -87,11 +87,20 @@ actual match results:
 
 - **One pooled league average** (goals per team per game, home and away
   combined) instead of separate home/away averages.
-- **Home advantage** fitted as the ratio of average home-team goals to that
-  pooled average, from real results — not assumed.
-- **Each team's attack/defense** computed the same way, from goals scored
-  and conceded across every match in the fit sample (home and away
-  together), relative to the pooled average.
+- **Home advantage** fitted as the ratio of home-team goals to away-team
+  goals, from real results — not assumed. It's applied as a matched pair
+  of multipliers (home side up, away side down) so a match's total expected
+  goals stays equal to the league's real scoring rate. An earlier version
+  only lifted the home side, which inflated every match's total and pushed
+  both-teams-to-score toward "Yes".
+- **Each team's attack/defense** fitted iteratively against the opponents
+  it actually faced (scoring 2 against the best defence counts for more
+  than 2 against the worst), relative to the pooled average.
+
+Checked on simulated seasons with known true team strengths (fit on 11
+rounds, predict the next 20): the average predicted BTTS rate matches the
+real one, and picks the model calls 70%+ sure land about as often as it
+says.
 
 Free-tier data means small samples — a demo league here has 14-18
 historical matches to fit from, and even a live API-Football key's free

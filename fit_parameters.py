@@ -44,9 +44,18 @@ from typing import Optional
 DEFAULT_HOME_ADVANTAGE_PRIOR = 1.30   # commonly cited ballpark for top-flight leagues
 DEFAULT_AVG_GOALS_PRIOR = 1.35        # goals per team per game, ballpark for top-5-league scoring rates
 LEAGUE_PRIOR_GAMES = 40               # how many "effective matches worth" of weight the home-advantage prior gets
-TEAM_PRIOR_GAMES = 4                  # how many "effective games worth" of weight each team's neutral prior gets
+TEAM_PRIOR_GAMES = 14                  # how many "effective games worth" of weight each team's neutral prior gets
 LOW_CONFIDENCE_THRESHOLD = 30         # effective sample size below this -> flag the fit as low-confidence
 HALF_LIFE_DAYS = 100                  # a match this old counts half as much as one today (Dixon & Coles 1997 ballpark)
+FIT_ITERATIONS = 25                   # passes of the opponent-adjusted rating fit (converges well before this)
+
+
+def side_multipliers(home_advantage: float) -> tuple[float, float]:
+    """Turn a home/away goal ratio into (home, away) multipliers on the
+    pooled league average that average to exactly 1 -- so home advantage
+    shifts goals from the away side to the home side without inventing
+    extra goals. E.g. 1.30 -> (1.13, 0.87)."""
+    return 2 * home_advantage / (1 + home_advantage), 2 / (1 + home_advantage)
 
 
 def _parse_date(d: str) -> date_cls:
@@ -126,44 +135,61 @@ def fit_league_parameters(
     total_away_goals_w = sum(w * m.away_goals for w, m in zip(weights, matches))
     avg_goals = (total_home_goals_w + total_away_goals_w) / (2 * total_weight)  # per team per game, pooled
 
-    avg_home_goals_per_match = total_home_goals_w / total_weight
-    raw_home_advantage = avg_home_goals_per_match / avg_goals if avg_goals > 0 else home_advantage_prior
-    # shrink toward the prior in proportion to EFFECTIVE sample size vs. league_prior_games
+    # Home advantage = ratio of home-team goals to away-team goals (the
+    # standard definition, ~1.3 in top flights). It is applied as a matched
+    # PAIR of multipliers -- home side up, away side down -- so a match's
+    # total expected goals stays equal to the league's real average. (An
+    # earlier version only lifted the home side, which inflated every
+    # match's total and biased both-teams-to-score toward "Yes".)
+    raw_home_advantage = (
+        total_home_goals_w / total_away_goals_w if total_away_goals_w > 0 else home_advantage_prior
+    )
     home_advantage = (
         total_weight * raw_home_advantage + league_prior_games * home_advantage_prior
     ) / (total_weight + league_prior_games)
+    home_mult, away_mult = side_multipliers(home_advantage)
 
-    # accumulate each team's (weighted) goals scored/conceded across every match it played
-    scored: dict[str, float] = {}
-    conceded: dict[str, float] = {}
-    weight_sum: dict[str, float] = {}
-    raw_games: dict[str, int] = {}
+    # Team ratings, fitted iteratively so they account for WHO each team
+    # played: 2 goals against the best defence is worth more than 2 against
+    # the worst. Each pass sets attack = goals scored / goals expected given
+    # the opponents' current defence ratings (and vice versa), shrunk toward
+    # 1.00 by how much (recency-weighted) data the team has.
+    team_names = sorted({m.home_team for m in matches} | {m.away_team for m in matches})
+    att = {t: 1.0 for t in team_names}
+    dfn = {t: 1.0 for t in team_names}
+    weight_sum: dict[str, float] = {t: 0.0 for t in team_names}
+    raw_games: dict[str, int] = {t: 0 for t in team_names}
     for w, m in zip(weights, matches):
-        scored[m.home_team] = scored.get(m.home_team, 0.0) + w * m.home_goals
-        conceded[m.home_team] = conceded.get(m.home_team, 0.0) + w * m.away_goals
-        weight_sum[m.home_team] = weight_sum.get(m.home_team, 0.0) + w
-        raw_games[m.home_team] = raw_games.get(m.home_team, 0) + 1
+        for t in (m.home_team, m.away_team):
+            weight_sum[t] += w
+            raw_games[t] += 1
 
-        scored[m.away_team] = scored.get(m.away_team, 0.0) + w * m.away_goals
-        conceded[m.away_team] = conceded.get(m.away_team, 0.0) + w * m.home_goals
-        weight_sum[m.away_team] = weight_sum.get(m.away_team, 0.0) + w
-        raw_games[m.away_team] = raw_games.get(m.away_team, 0) + 1
+    for _ in range(FIT_ITERATIONS):
+        scored = {t: 0.0 for t in team_names}; exp_scored = {t: 0.0 for t in team_names}
+        conceded = {t: 0.0 for t in team_names}; exp_conceded = {t: 0.0 for t in team_names}
+        for w, m in zip(weights, matches):
+            h, a = m.home_team, m.away_team
+            scored[h] += w * m.home_goals; exp_scored[h] += w * avg_goals * home_mult * dfn[a]
+            scored[a] += w * m.away_goals; exp_scored[a] += w * avg_goals * away_mult * dfn[h]
+            conceded[h] += w * m.away_goals; exp_conceded[h] += w * avg_goals * away_mult * att[a]
+            conceded[a] += w * m.home_goals; exp_conceded[a] += w * avg_goals * home_mult * att[h]
+        for t in team_names:
+            k, g = team_prior_games, weight_sum[t]
+            raw_att = scored[t] / exp_scored[t] if exp_scored[t] > 0 else 1.0
+            raw_def = conceded[t] / exp_conceded[t] if exp_conceded[t] > 0 else 1.0
+            att[t] = (g * raw_att + k) / (g + k)
+            dfn[t] = (g * raw_def + k) / (g + k)
+        # keep the league average at exactly 1.00 so ratings don't drift
+        mean_att = sum(att.values()) / len(att)
+        mean_def = sum(dfn.values()) / len(dfn)
+        att = {t: v / mean_att for t, v in att.items()}
+        dfn = {t: v / mean_def for t, v in dfn.items()}
 
-    teams: dict[str, TeamStrength] = {}
-    for team, eff_g in weight_sum.items():
-        raw_scored_avg = scored[team] / eff_g
-        raw_conceded_avg = conceded[team] / eff_g
-        # shrink each team's (recency-weighted) per-game average toward the
-        # league average, weighted by EFFECTIVE games actually behind it
-        shrunk_scored_avg = (eff_g * raw_scored_avg + team_prior_games * avg_goals) / (eff_g + team_prior_games)
-        shrunk_conceded_avg = (eff_g * raw_conceded_avg + team_prior_games * avg_goals) / (eff_g + team_prior_games)
-        teams[team] = TeamStrength(
-            team=team,
-            games_played=raw_games[team],
-            effective_games=round(eff_g, 2),
-            attack=shrunk_scored_avg / avg_goals if avg_goals > 0 else 1.0,
-            defense=shrunk_conceded_avg / avg_goals if avg_goals > 0 else 1.0,
-        )
+    teams: dict[str, TeamStrength] = {
+        t: TeamStrength(team=t, games_played=raw_games[t], effective_games=round(weight_sum[t], 2),
+                        attack=att[t], defense=dfn[t])
+        for t in team_names
+    }
 
     return LeagueFit(
         avg_goals=avg_goals,
