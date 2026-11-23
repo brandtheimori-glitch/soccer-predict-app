@@ -24,7 +24,7 @@
   {% macro market_box(title, picks, perf, market, label, pick_key, conf_key) %}
   <section class="btts-section">
     <h2>{{ title }}</h2>
-    <p class="btts-sub">Next {{ upcoming_days }} days, all leagues, sorted by how sure the model is. Higher % = stronger pick.</p>
+    <p class="btts-sub">Today and the next {{ upcoming_days }} days, all leagues, sorted by how sure the model is. Higher % = stronger pick.</p>
     {% if picks %}
     <ol class="btts-list">
       {% for p in picks %}
@@ -37,7 +37,7 @@
       {% endfor %}
     </ol>
     {% else %}
-    <p>No upcoming matches found right now.</p>
+    <p>No matches in the next {{ upcoming_days }} days. Check back closer to the weekend.</p>
     {% endif %}
 
     <div class="btts-record">
