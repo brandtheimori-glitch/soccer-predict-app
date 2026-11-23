@@ -413,7 +413,7 @@ _FD_LEAGUES = [
     {"id": "PPL", "name": "Primeira Liga"},
     {"id": "BSA", "name": "Brasileirão"},  # plays through the European international breaks
 ]  # 9 leagues -> at most 9 calls on a cold cache, under the 10/min free cap
-UPCOMING_DAYS = 14  # show every fixture in the next two weeks, not just the next round
+UPCOMING_DAYS = 2  # today plus the next 2 days: only the games about to be played
 _FD_UPCOMING = {"SCHEDULED", "TIMED"}
 
 

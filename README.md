@@ -238,7 +238,7 @@ features, but its free plan may not include the current season.
 
 The top of the page has two lists: the 10 most confident BTTS calls
 (Yes or No) and the 10 most confident over/under 2.5 goals calls, both
-covering every fixture in the next 14 days across all leagues (Premier
+covering every fixture from today through the next 2 days across all leagues (Premier
 League, La Liga, Serie A, Bundesliga, Ligue 1, Eredivisie, Championship,
 Primeira Liga and the Brasileirão, which keeps playing through European
 international breaks), sorted by how sure the model is. Over/under is graded
