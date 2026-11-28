@@ -112,7 +112,7 @@ def build_predictions(league: str):
     return results, ds.label, ds.available_leagues(), fit
 
 
-TOP_PICKS = 10  # how many of the most confident calls to feature per market
+TOP_PICKS = 20  # how many of the most confident calls to feature per market
 
 
 def all_upcoming() -> list[dict]:
@@ -130,11 +130,12 @@ def all_upcoming() -> list[dict]:
     return out
 
 
-def top_picks(preds: list[dict], market: str, limit: int = TOP_PICKS) -> list[dict]:
-    """The most confident calls for one market ("btts" or "ou"), most-sure
-    first. Confidence is the model's probability for the side it picks, so
-    0.70 means "70% sure"."""
-    return sorted(preds, key=lambda p: p[f"{market}_confidence"], reverse=True)[:limit]
+def top_picks(preds: list[dict], market: str, limit: int = TOP_PICKS, key: str | None = None) -> list[dict]:
+    """The most confident calls for one market ("btts", "ou" or "combo"),
+    most-sure first. Confidence is the model's probability for the side it
+    picks, so 0.70 means "70% sure"."""
+    key = key or f"{market}_confidence"
+    return sorted(preds, key=lambda p: p[key], reverse=True)[:limit]
 
 
 @app.route("/")
@@ -144,17 +145,20 @@ def index():
     upcoming = all_upcoming()
     btts_picks = top_picks(upcoming, "btts")
     ou_picks = top_picks(upcoming, "ou")
+    combo_picks = top_picks(upcoming, "combo", key="combo_prob")
     predictions, source_label, leagues, fit = build_predictions(league)
     record = track_record.summary()
     value_perf = track_record.value_bet_performance()
     btts_perf = track_record.btts_performance()
     ou_perf = track_record.ou_performance()
+    combo_perf = track_record.combo_performance()
     tuning = threshold_tuning.evaluate_thresholds()
     return render_template(
         "index.html", predictions=predictions, source_label=source_label,
         record=record, leagues=leagues, active_league=league, fit=fit,
         value_perf=value_perf, tuning=tuning, btts_picks=btts_picks, btts_perf=btts_perf,
-        ou_picks=ou_picks, ou_perf=ou_perf, upcoming_days=UPCOMING_DAYS,
+        ou_picks=ou_picks, ou_perf=ou_perf, combo_picks=combo_picks, combo_perf=combo_perf,
+        upcoming_days=UPCOMING_DAYS, top_n=TOP_PICKS,
     )
 
 
@@ -176,6 +180,12 @@ def api_btts():
 @app.route("/api/over-under")
 def api_over_under():
     return jsonify({"top_picks": top_picks(all_upcoming(), "ou"), "performance": track_record.ou_performance()})
+
+
+@app.route("/api/combo")
+def api_combo():
+    return jsonify({"top_picks": top_picks(all_upcoming(), "combo", key="combo_prob"),
+                    "performance": track_record.combo_performance()})
 
 
 @app.route("/api/predictions")

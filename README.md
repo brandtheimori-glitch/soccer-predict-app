@@ -236,9 +236,9 @@ features, but its free plan may not include the current season.
 
 ## Pick lists: both teams to score, and over/under 2.5 goals
 
-The top of the page has two lists: the 10 most confident BTTS calls
-(Yes or No) and the 10 most confident over/under 2.5 goals calls, both
-covering every fixture from today through the next 2 days across all leagues (Premier
+The top of the page has three lists of 20: the most confident "both teams score + over 2.5" combos (both must happen in the same game), the most confident BTTS calls
+(Yes or No) and the most confident over/under 2.5 goals calls, all
+covering every fixture from today through the next 10 days across all leagues (Premier
 League, La Liga, Serie A, Bundesliga, Ligue 1, Eredivisie, Championship,
 Primeira Liga and the Brasileirão, which keeps playing through European
 international breaks), sorted by how sure the model is. Over/under is graded
@@ -246,7 +246,7 @@ on total goals: 3+ is "Over". Every pick is
 logged before kickoff and graded after, and each list's "How these picks
 have actually done" table shows the real hit rate at each confidence level
 (50%+, 55%+, 60%+, ...). That's how you can check whether sticking to
-the most confident picks really gives a higher win rate. Also at `/api/btts` and `/api/over-under`.
+the most confident picks really gives a higher win rate. Also at `/api/combo`, `/api/btts` and `/api/over-under`.
 
 This is a separate decision from hosting it publicly (next section) — you
 can set `API_FOOTBALL_KEY` locally, on a free host, or not at all.

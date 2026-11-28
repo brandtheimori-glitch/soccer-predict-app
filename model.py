@@ -75,6 +75,7 @@ class Prediction:
     top_scorelines: list[tuple[tuple[int, int], float]]
     over_2_5: float
     btts: float  # both teams to score
+    btts_and_over: float = 0.0  # both teams score AND 3+ total goals
     market_probs: Optional[tuple[float, float, float]] = None
     inputs: dict = field(default_factory=dict)
     value_bets: list = field(default_factory=list)
@@ -135,6 +136,8 @@ class Prediction:
             "btts_confidence": round(self.btts_confidence, 3),
             "ou_pick": self.ou_pick,
             "ou_confidence": round(self.ou_confidence, 3),
+            "combo_pick": "Yes",
+            "combo_prob": round(self.btts_and_over, 3),
             "market_probs": (
                 {
                     "home": round(self.market_probs[0], 3),
@@ -183,9 +186,16 @@ def outcomes_from_matrix(matrix: list[list[float]]):
     btts = sum(
         matrix[i][j] for i in range(MAX_GOALS + 1) for j in range(MAX_GOALS + 1) if i > 0 and j > 0
     )
+    # BOTH at once (both teams score AND 3+ goals), read straight off the
+    # score matrix -- not btts * over_2_5, because the two are strongly
+    # linked (when both teams score, 3+ goals is far more likely)
+    btts_and_over = sum(
+        matrix[i][j] for i in range(MAX_GOALS + 1) for j in range(MAX_GOALS + 1)
+        if i > 0 and j > 0 and i + j > 2.5
+    )
     flat = [((i, j), matrix[i][j]) for i in range(MAX_GOALS + 1) for j in range(MAX_GOALS + 1)]
     flat.sort(key=lambda x: x[1], reverse=True)
-    return p_home, p_draw, p_away, over_2_5, btts, flat[:5]
+    return p_home, p_draw, p_away, over_2_5, btts, btts_and_over, flat[:5]
 
 
 def blend(model_probs: tuple[float, float, float], market_probs: Optional[tuple[float, float, float]],
@@ -258,7 +268,7 @@ def predict_match(home: TeamStrength, away: TeamStrength, avg_goals: float, home
                    value_threshold: float = VALUE_EDGE_THRESHOLD) -> Prediction:
     home_xg, away_xg = expected_goals(home, away, avg_goals, home_advantage)
     matrix = score_matrix(home_xg, away_xg)
-    p_home, p_draw, p_away, over_2_5, btts, top5 = outcomes_from_matrix(matrix)
+    p_home, p_draw, p_away, over_2_5, btts, btts_and_over, top5 = outcomes_from_matrix(matrix)
 
     market_probs = odds.implied_probabilities() if odds else None
     p_home_b, p_draw_b, p_away_b = blend((p_home, p_draw, p_away), market_probs)
@@ -296,6 +306,7 @@ def predict_match(home: TeamStrength, away: TeamStrength, avg_goals: float, home
         top_scorelines=top5,
         over_2_5=over_2_5,
         btts=btts,
+        btts_and_over=btts_and_over,
         all_edges=all_edges,
         market_probs=market_probs,
         value_bets=value_bets,
