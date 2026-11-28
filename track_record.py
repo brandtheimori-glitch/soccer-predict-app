@@ -148,6 +148,8 @@ def _log_prediction(fixture_id: str, home_team: str, away_team: str, prediction:
         "ou_pick": prediction.get("ou_pick"),
         "ou_confidence": prediction.get("ou_confidence"),
         "ou_correct": None,
+        "combo_prob": prediction.get("combo_prob"),
+        "combo_correct": None,
         "date": prediction.get("date"),
         # snapshot of value bets AS FLAGGED AT PREDICTION TIME (under whatever
         # threshold was active then) — odds/probabilities here never change
@@ -197,6 +199,8 @@ def _grade(fixture_id: str, home_goals: int, away_goals: int) -> None:
             if e.get("ou_pick"):
                 over = home_goals + away_goals > 2
                 e["ou_correct"] = (e["ou_pick"] == "Over") == over
+            if e.get("combo_prob") is not None:
+                e["combo_correct"] = home_goals > 0 and away_goals > 0 and home_goals + away_goals > 2
             _grade_edge_list(e["value_bets"], actual)
             _grade_edge_list(e.get("all_edges", []), actual)
             changed.append(e)
@@ -233,7 +237,8 @@ def summary() -> dict:
     }
 
 
-def market_performance(market: str) -> dict:
+def market_performance(market: str, conf_key: str | None = None,
+                       levels_list: list[float] = BTTS_CONFIDENCE_LEVELS) -> dict:
     """
     Hit rate for one pick market ("btts" = both teams to score, "ou" = over/
     under 2.5 goals), overall AND restricted to the picks the model was most
@@ -242,10 +247,11 @@ def market_performance(market: str) -> dict:
     higher win rate -- and this shows whether that's actually happening,
     from real graded results, instead of assuming it.
     """
-    correct_key, conf_key = f"{market}_correct", f"{market}_confidence"
+    correct_key = f"{market}_correct"
+    conf_key = conf_key or f"{market}_confidence"
     graded = [e for e in _load() if e["graded"] and e.get(correct_key) is not None]
     levels = []
-    for level in BTTS_CONFIDENCE_LEVELS:
+    for level in levels_list:
         picks = [e for e in graded if (e.get(conf_key) or 0) >= level]
         hits = sum(1 for e in picks if e[correct_key])
         levels.append({
@@ -271,6 +277,16 @@ def btts_performance() -> dict:
 
 def ou_performance() -> dict:
     return market_performance("ou")
+
+
+# The combo needs two things to happen at once, so its probabilities run
+# lower than single picks (a 55% combo is a strong one) -- hence lower levels.
+COMBO_LEVELS = [0.40, 0.45, 0.50, 0.55, 0.60]
+
+
+def combo_performance() -> dict:
+    """Hit rate of 'both teams score AND over 2.5 goals' calls."""
+    return market_performance("combo", conf_key="combo_prob", levels_list=COMBO_LEVELS)
 
 
 def value_bet_performance() -> dict:

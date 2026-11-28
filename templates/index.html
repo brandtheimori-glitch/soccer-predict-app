@@ -21,15 +21,16 @@
     <p class="source-tag">Data source: {{ source_label }}</p>
   </header>
 
-  {% macro market_box(title, picks, perf, market, label, pick_key, conf_key) %}
+  {% macro market_box(title, picks, perf, market, label, pick_key, conf_key, show_pick=True, note='') %}
   <section class="btts-section">
     <h2>{{ title }}</h2>
-    <p class="btts-sub">Today and the next {{ upcoming_days }} days, all leagues, sorted by how sure the model is. Higher % = stronger pick.</p>
+    <p class="btts-sub">Top {{ top_n }} · today and the next {{ upcoming_days }} days · all leagues, sorted by how sure the model is. Higher % = stronger pick.</p>
+    {% if note %}<p class="btts-sub combo-note">{{ note }}</p>{% endif %}
     {% if picks %}
     <ol class="btts-list">
       {% for p in picks %}
       <li class="btts-row">
-        <span class="btts-answer pick-{{ p[pick_key]|lower }}">{{ label }} {{ p[pick_key] }}</span>
+        <span class="btts-answer pick-{{ p[pick_key]|lower }}">{{ label }}{% if show_pick %} {{ p[pick_key] }}{% endif %}</span>
         <span class="btts-conf">{{ (p[conf_key] * 100) | round(0) | int }}%</span>
         <span class="btts-match">{{ p.home_team }} vs {{ p.away_team }}</span>
         <span class="btts-meta">{{ p.league_name }} · <span class="nowrap">{{ p.date | nice_date }}</span></span>
@@ -68,10 +69,12 @@
   {% endmacro %}
 
   <nav class="market-tabs">
+    <a href="#combo">BTTS + Over</a>
     <a href="#btts">BTTS</a>
-    <a href="#ou">Over/Under 2.5</a>
+    <a href="#ou">O/U 2.5</a>
     <a href="#matches">By league</a>
   </nav>
+  <div id="combo">{{ market_box('Best "both teams score + over 2.5" picks', combo_picks, combo_perf, 'combo', 'BTTS + Over', 'combo_pick', 'combo_prob', show_pick=False, note='Both must happen in the same game: both teams score AND 3+ goals. Needing two things makes these lower than single picks, so 55%+ is a strong combo.') }}</div>
   <div id="btts">{{ market_box('Best "both teams to score" picks', btts_picks, btts_perf, 'btts', 'BTTS', 'btts_pick', 'btts_confidence') }}</div>
   <div id="ou">{{ market_box('Best over / under 2.5 goals picks', ou_picks, ou_perf, 'ou', '', 'ou_pick', 'ou_confidence') }}</div>
 
@@ -198,7 +201,8 @@
         Both teams to score: <strong class="pick-{{ p.btts_pick|lower }}-text">{{ p.btts_pick }}</strong>
         ({{ (p.btts_confidence * 100) | round(0) | int }}% sure) ·
         2.5 goals: <strong class="pick-{{ p.ou_pick|lower }}-text">{{ p.ou_pick }}</strong>
-        ({{ (p.ou_confidence * 100) | round(0) | int }}% sure)
+        ({{ (p.ou_confidence * 100) | round(0) | int }}% sure) ·
+        BTTS + Over 2.5: <strong>{{ (p.combo_prob * 100) | round(0) | int }}%</strong>
       </div>
 
       <button class="why-toggle">why? ▾</button>
